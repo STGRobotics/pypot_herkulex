@@ -55,6 +55,7 @@ def from_config(config, strict=True, sync=True):
         attached_ids = [m.id for m in attached_motors]
         dxl_io = dxl_io_from_confignode(config, c_params, attached_ids, strict)
 
+        check_motor_mode(config, dxl_io, motor_names)
         check_motor_limits(config, dxl_io, motor_names)
 
         c = pypot.dynamixel.controller.BaseDxlController(dxl_io, attached_motors)
@@ -89,7 +90,9 @@ def motor_from_confignode(config, motor_name):
                  model=type,
                  direct=True if params['orientation'] == 'direct' else False,
                  offset=params['offset'],
-                 broken='broken' in params)
+                 broken='broken' in params,
+                 control_mode='wheel' if ('mode' in params and
+                                          params['mode'] == 'wheel') else 'joint')
 
     logger.info("Instantiating motor '%s' id=%d direct=%s offset=%s",
                 m.name, m.id, m.direct, m.offset,
@@ -127,12 +130,39 @@ def dxl_io_from_confignode(config, c_params, ids, strict):
 
     return dxl_io
 
+def check_motor_mode(config, dxl_io, motor_names):
+    changed_modes = {}
+
+    for name in motor_names:
+        m = config['motors'][name]
+        id = m['id']
+
+        try:
+            old_mode = dxl_io.get_control_mode((id, ))[0]
+        except IndexError: # probably a broken motor so we just skip
+            continue
+
+        new_mode = m['mode'] if 'mode' in m else 'joint'
+
+        if new_mode != old_mode:
+            logger.warning("Changing control mode of '%s' to %s",
+                           name, new_mode,
+                           extra={'config': config})
+
+            changed_modes[id] = new_mode
+
+    if changed_modes:
+        dxl_io.set_control_mode(changed_modes)
 
 def check_motor_limits(config, dxl_io, motor_names):
     changed_angle_limits = {}
 
     for name in motor_names:
         m = config['motors'][name]
+
+        if 'mode' in m and m['mode'] == 'wheel':
+            continue
+
         id = m['id']
 
         try:
