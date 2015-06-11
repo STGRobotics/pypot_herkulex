@@ -123,6 +123,8 @@ class _DxlRegisterController(_DxlController):
 class AngleLimitRegisterController(_DxlRegisterController):
     def get_register(self):
         motors = [m for m in self.working_motors if hasattr(m, self.varname)]
+        motors = [m for m in motors if m.control_mode == 'joint']
+
         if not motors:
             return
 

@@ -43,6 +43,8 @@ class DxlPositionRegister(DxlOrientedRegister):
         return value - instance.offset
 
     def __set__(self, instance, value):
+        if instance.control_mode == 'wheel':
+            raise ValueError('Cannot set register {} in wheel mode'.format(self.label))
         value = value + instance.offset
         DxlOrientedRegister.__set__(self, instance, value)
 
@@ -101,7 +103,7 @@ class DxlMotor(Motor):
 
     def __init__(self, id, name=None, model='',
                  direct=True, offset=0.0,
-                 broken=False):
+                 broken=False, control_mode='joint'):
         self.__dict__['id'] = id
 
         name = name if name is not None else 'motor_{}'.format(id)
@@ -118,6 +120,7 @@ class DxlMotor(Motor):
         self.compliant_behavior = 'dummy'
 
         self._broken = broken
+        self.__dict__['control_mode'] = control_mode
 
     def __repr__(self):
         return ('<DxlMotor name={self.name} '
@@ -192,7 +195,8 @@ class DxlMotor(Motor):
 
     def _set_compliancy(self, is_compliant):
         # Change the goal_position only if you switch from compliant to not compliant mode
-        if not is_compliant and self.compliant:
+        if ((not is_compliant and self.compliant) and
+                self.control_mode == 'joint'):
             self.goal_position = self.present_position
         self.__dict__['compliant'] = is_compliant
 
@@ -202,6 +206,8 @@ class DxlMotor(Motor):
 
     @angle_limit.setter
     def angle_limit(self, limits):
+        if self.control_mode == 'wheel':
+            raise ValueError('Cannot change angle limit in wheel mode!')
         self.lower_limit, self.upper_limit = limits
 
     @property
@@ -251,8 +257,10 @@ class DxlAXRXMotor(DxlMotor):
     compliance_slope = DxlRegister(rw=True)
 
     def __init__(self, id, name=None, model='',
-                 direct=True, offset=0.0, broken=False):
-        DxlMotor.__init__(self, id, name, model, direct, offset, broken)
+                 direct=True, offset=0.0,
+                 broken=False, control_mode='joint'):
+        DxlMotor.__init__(self, id, name, model, direct, offset,
+                          broken, control_mode)
         self.max_pos = 150
 
 
@@ -268,22 +276,26 @@ class DxlMXMotor(DxlMotor):
     pid = DxlRegister(rw=True)
 
     def __init__(self, id, name=None, model='',
-                 direct=True, offset=0.0, broken=False):
+                 direct=True, offset=0.0,
+                 broken=False, control_mode='joint'):
         """ This class represents the RX and MX robotis motor.
 
             This class adds access to:
                 * PID gains (see the robotis website for details)
 
             """
-        DxlMotor.__init__(self, id, name, model, direct, offset, broken)
+        DxlMotor.__init__(self, id, name, model, direct, offset,
+                          broken, control_mode)
         self.max_pos = 180
 
 
 class DxlXL320Motor(DxlMXMotor):
     """ This class represents the XL-320 robotis motor. """
     def __init__(self, id, name=None, model='XL-320',
-                 direct=True, offset=0.0, broken=False):
-        DxlMXMotor.__init__(self, id, name, model, direct, offset, broken)
+                 direct=True, offset=0.0,
+                 broken=False, control_mode='joint'):
+        DxlMXMotor.__init__(self, id, name, model, direct, offset,
+                            broken, control_mode)
         self.max_pos = 150
 
 
